@@ -1,5 +1,10 @@
 # Nagios/Centron check | Nextcloud serverinfo
 
+![License](https://img.shields.io/github/license/kozliatko/check_nextcloud)
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![Nagios/Icinga](https://img.shields.io/badge/Nagios%2FIcinga-plugin-004357)
+![Last commit](https://img.shields.io/github/last-commit/kozliatko/check_nextcloud)
+
 Nagios/Centreon plugin for nextcloud serverinfo API (https://github.com/nextcloud/serverinfo)
 
 This branch contains the check for Python 3. A version for Python 2.7 can be found [here](https://github.com/BornToBeRoot/check_nextcloud/tree/stable-python2.7).
