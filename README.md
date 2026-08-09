@@ -1,6 +1,7 @@
 # Nagios/Centron check | Nextcloud serverinfo
 
 [![Security](https://github.com/kozliatko/check_nextcloud/actions/workflows/security.yml/badge.svg)](https://github.com/kozliatko/check_nextcloud/actions/workflows/security.yml)
+[![Lint](https://github.com/kozliatko/check_nextcloud/actions/workflows/lint.yml/badge.svg)](https://github.com/kozliatko/check_nextcloud/actions/workflows/lint.yml)
 ![License](https://img.shields.io/github/license/kozliatko/check_nextcloud)
 ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 ![Nagios/Icinga](https://img.shields.io/badge/Nagios%2FIcinga-plugin-004357)
