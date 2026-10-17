@@ -38,6 +38,14 @@ Options:
                         (default="https")
   --ignore-proxy        Ignore any configured proxy server on this system for
                         this request
+  --max-major-behind=MAX_MAJOR_BEHIND
+                        Check "system": WARNING when the installed major
+                        version is more than N majors behind the latest
+                        release on download.nextcloud.com
+  --release-cache=RELEASE_CACHE
+                        Cache file for the latest release, refreshed every 12
+                        hours
+                        (default="/var/tmp/check_nextcloud_latest_release")
   --api-url=API_URL     Url of the api
                         (default="/ocs/v2.php/apps/serverinfo/api/v1/info")
 
@@ -53,6 +61,10 @@ Options:
   or for the check: `uploadFilesize`
   ```
   $USER1$/plugins_custom/check_nextcloud.py -u $_HOSTCLOUDUSER$ -p $_HOSTCLOUDPWD$ -H $HOSTNAME$ -c $ARG1$ --upload-filesize=$ARG2$ --ignore-proxy
+  ```
+  or for the check `system` with a warning for outdated versions (see [Example 4](#example-4))
+  ```
+  $USER1$/plugins_custom/check_nextcloud.py -u $_HOSTCLOUDUSER$ -p $_HOSTCLOUDPWD$ -H $HOSTNAME$ -c system --max-major-behind=$ARG2$ --ignore-proxy
   ```
 * Create a service for each thing you want to check (system, storage, etc.) and link it to your host(s)
 * Add the credentials of your nextcloud admin user as custom macro (CLOUDUSER, COUDPWD) to your host.
@@ -90,6 +102,29 @@ CRITICAL - Upload max filesize is set to 512.0MiB, but should be 2.0GiB
 
 
 
+## Example 4
+
+```
+./check_nextcloud.py -u adminUser -p secretPassword -H cloud.example.com -c system --max-major-behind=2
+
+OK - Nextcloud version: 33.0.9.1 (latest release 35.0.2)
+
+# Or, when the server falls too far behind...
+
+WARNING - Nextcloud version: 32.0.6.1, 3 major versions behind the latest release 35.0.2
+```
+
+With `--max-major-behind=N` the check `system` compares the installed major version with the newest stable release
+listed on https://download.nextcloud.com/server/releases/ and returns WARNING when the server is more than N major
+versions behind. Only the major number counts: with `N=2` and the latest release 35.x, versions 33.x and newer are OK
+and 32.x is WARNING. Without the parameter the check behaves as before and always returns OK.
+
+The latest release is cached in the file given by `--release-cache` (default `/var/tmp/check_nextcloud_latest_release`)
+and refreshed every 12 hours, so checking many servers makes at most one request to download.nextcloud.com. The file
+must be writable by the user running the check. When download.nextcloud.com cannot be reached, the last cached value
+is used; without one the check returns OK with the note `(latest release unknown)`, so an outage of the download
+server never raises an alert.
+
 ## Icinga config example
 
 
@@ -120,6 +155,11 @@ object CheckCommand "check_nextcloud" {
       value = "nagios"
       description = "The perfdata format we like"
     }
+    "--max-major-behind" = {
+      value = "$nextcloud_max_major_behind$"
+      set_if = "$nextcloud_max_major_behind$"
+      description = "Check system: WARNING when more than N major versions behind the latest release"
+    }
   }
 }
 ```
@@ -137,6 +177,9 @@ apply Service for (checkname in ["system","storage","shares","webserver","php","
   vars.nextcloud_hostname = host.vars.nextcloud_hostname
   vars.nextcloud_token = host.vars.nextcloud_token
   vars.nextcloud_api_url = host.vars.nextcloud_api_url
+  if (checkname == "system") {
+    vars.nextcloud_max_major_behind = 2
+  }
   vars.notification["mail"] = {  }
   check_command = "check_nextcloud"
 

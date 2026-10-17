@@ -20,10 +20,13 @@
 # - Parameter "--nc-token" added (Thanks @sblatt)
 #  ~~ Version 2.0 ~~ 
 # - Migrated from Python 2.7 to 3 (Thanks @waja)
+#  ~~ Version 2.1 ~~
+# - Parameter "--max-major-behind" added: check "system" warns when the installed major version is more than N
+# majors behind the latest release on download.nextcloud.com (cached in --release-cache for 12 hours)
 #
 #################
 
-import urllib.request, urllib.error, urllib.parse, base64, xml.etree.ElementTree, sys, traceback, ssl, re
+import urllib.request, urllib.error, urllib.parse, base64, xml.etree.ElementTree, sys, traceback, ssl, re, os, time
 
 # Some helper functions
 def calc_size_suffix(num, suffix='B'):
@@ -44,6 +47,38 @@ def calc_size_nagios(num, suffix='B'):
 
 	return "%.1f%s%s" % (num, 'Y', suffix)
 
+def latest_release(cache_file, ignore_proxy=False, max_age=12*3600):
+	"""Newest stable Nextcloud release, from cache or download.nextcloud.com; a stale cache beats nothing"""
+	cached = None
+	try:
+		with open(cache_file) as f:
+			cached = f.read().strip() or None
+		if cached and time.time() - os.path.getmtime(cache_file) < max_age:
+			return cached
+	except OSError:
+		pass
+
+	try:
+		handlers = [urllib.request.ProxyHandler({})] if ignore_proxy else []
+		opener = urllib.request.build_opener(*handlers)
+		listing = opener.open('https://download.nextcloud.com/server/releases/', timeout=15).read().decode('utf-8', 'replace')
+		versions = set(re.findall(r'nextcloud-(\d+\.\d+\.\d+)\.tar\.bz2"', listing))
+		latest = max(versions, key=lambda v: [int(x) for x in v.split('.')])
+	except Exception:
+		return cached
+
+	# write a fresh temp file (O_EXCL never follows a symlink) and rename it over the cache
+	tmp = '{0}.{1}'.format(cache_file, os.getpid())
+	try:
+		fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+		with os.fdopen(fd, 'w') as f:
+			f.write(latest + '\n')
+		os.rename(tmp, cache_file)
+	except OSError:
+		pass
+
+	return latest
+
 # Command line parser
 from optparse import OptionParser
 
@@ -59,13 +94,15 @@ parser.add_option('--upload-filesize', dest='upload_filesize', default='512.0MiB
 parser.add_option('--protocol', dest='protocol', choices=['https', 'http'], default='https', help='Protocol you want to use [http|https] (default="https")')
 parser.add_option('--ignore-proxy', dest='ignore_proxy', default=False, action='store_true', help='Ignore any configured proxy server on this system for this request (default="false")')
 parser.add_option('--ignore-sslcert', dest='ignore_sslcert', default=False, action='store_true', help='Ignore ssl certificate (default="false")')
+parser.add_option('--max-major-behind', dest='max_major_behind', type='int', help='Check "system": WARNING when the installed major version is more than N majors behind the latest release on download.nextcloud.com')
+parser.add_option('--release-cache', dest='release_cache', default='/var/tmp/check_nextcloud_latest_release', help='Cache file for the latest release, refreshed every 12 hours (default="/var/tmp/check_nextcloud_latest_release")')
 parser.add_option('--api-url', dest='api_url', type='string', default='/ocs/v2.php/apps/serverinfo/api/v1/info', help='Url of the api (default="/ocs/v2.php/apps/serverinfo/api/v1/info")')
 
 (options, args) = parser.parse_args()
 
 # Print the version of this script
 if options.version:
-	print('Version 2.0')
+	print('Version 2.1')
 	sys.exit(0)
 
 # Validate the user input...
@@ -183,7 +220,23 @@ if options.check == 'system':
 
 	xml_system_version = str(xml_system.find('version').text)
 
-	print('OK - Nextcloud version: {0}'.format(xml_system_version))
+	if options.max_major_behind is None:
+		print('OK - Nextcloud version: {0}'.format(xml_system_version))
+		sys.exit(0)
+
+	latest = latest_release(options.release_cache, options.ignore_proxy)
+
+	if not latest:
+		print('OK - Nextcloud version: {0} (latest release unknown)'.format(xml_system_version))
+		sys.exit(0)
+
+	behind = int(latest.split('.')[0]) - int(xml_system_version.split('.')[0])
+
+	if behind > options.max_major_behind:
+		print('WARNING - Nextcloud version: {0}, {1} major versions behind the latest release {2}'.format(xml_system_version, behind, latest))
+		sys.exit(1)
+
+	print('OK - Nextcloud version: {0} (latest release {1})'.format(xml_system_version, latest))
 	sys.exit(0)
 
 # Get informations about the storage
