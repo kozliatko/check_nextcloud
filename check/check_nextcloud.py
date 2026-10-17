@@ -26,6 +26,8 @@
 #  ~~ Version 2.2 ~~
 # - Check "apps" asks the api for the app list (skipApps=false), recent serverinfo versions leave it out by default
 # - Parameter "--apps-info" added: check "apps" always returns OK and only lists the available app updates
+#  ~~ Version 2.3 ~~
+# - Parameter "--apps-max-updates" added: check "apps" returns WARNING only when more than N app updates are available
 #
 #################
 
@@ -100,13 +102,14 @@ parser.add_option('--ignore-sslcert', dest='ignore_sslcert', default=False, acti
 parser.add_option('--max-major-behind', dest='max_major_behind', type='int', help='Check "system": WARNING when the installed major version is more than N majors behind the latest release on download.nextcloud.com')
 parser.add_option('--release-cache', dest='release_cache', default='/var/tmp/check_nextcloud_latest_release', help='Cache file for the latest release, refreshed every 12 hours (default="/var/tmp/check_nextcloud_latest_release")')
 parser.add_option('--apps-info', dest='apps_info', default=False, action='store_true', help='Check "apps": always return OK and only list the available app updates (default="false")')
+parser.add_option('--apps-max-updates', dest='apps_max_updates', type='int', default=0, help='Check "apps": WARNING only when more than N app updates are available, OK with the list below that (default="0")')
 parser.add_option('--api-url', dest='api_url', type='string', default='/ocs/v2.php/apps/serverinfo/api/v1/info', help='Url of the api (default="/ocs/v2.php/apps/serverinfo/api/v1/info")')
 
 (options, args) = parser.parse_args()
 
 # Print the version of this script
 if options.version:
-	print('Version 2.2')
+	print('Version 2.3')
 	sys.exit(0)
 
 # Validate the user input...
@@ -359,7 +362,7 @@ if options.check == 'apps':
 		for app in xml_apps_updates if xml_apps_updates is not None else []:
 			xml_apps_list.append('{0}->{1}'.format(app.tag, app.text))
 
-		if options.apps_info:
+		if options.apps_info or xml_apps_num_updates_available <= options.apps_max_updates:
 			print('OK - {0} app update(s) available: {1}'.format(xml_apps_num_updates_available, ', '.join(xml_apps_list)))
 			sys.exit(0)
 

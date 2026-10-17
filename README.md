@@ -48,6 +48,10 @@ Options:
                         (default="/var/tmp/check_nextcloud_latest_release")
   --apps-info           Check "apps": always return OK and only list the
                         available app updates (default="false")
+  --apps-max-updates=APPS_MAX_UPDATES
+                        Check "apps": WARNING only when more than N app
+                        updates are available, OK with the list below that
+                        (default="0")
   --api-url=API_URL     Url of the api
                         (default="/ocs/v2.php/apps/serverinfo/api/v1/info")
 
@@ -144,6 +148,16 @@ updates:
 
 ```
 ./check_nextcloud.py -u adminUser -p secretPassword -H cloud.example.com -c apps --apps-info
+
+OK - 2 app update(s) available: deck->1.17.7, onlyoffice->9.15.1
+```
+
+With `--apps-max-updates=N` the check returns WARNING only when more than N app updates are available; up to N it
+returns OK with the same list. This keeps a few pending updates from raising an alert but still catches a server
+where updates pile up:
+
+```
+./check_nextcloud.py -u adminUser -p secretPassword -H cloud.example.com -c apps --apps-max-updates=10
 
 OK - 2 app update(s) available: deck->1.17.7, onlyoffice->9.15.1
 ```
