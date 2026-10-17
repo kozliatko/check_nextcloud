@@ -46,6 +46,8 @@ Options:
                         Cache file for the latest release, refreshed every 12
                         hours
                         (default="/var/tmp/check_nextcloud_latest_release")
+  --apps-info           Check "apps": always return OK and only list the
+                        available app updates (default="false")
   --api-url=API_URL     Url of the api
                         (default="/ocs/v2.php/apps/serverinfo/api/v1/info")
 
@@ -124,6 +126,30 @@ and refreshed every 12 hours, so checking many servers makes at most one request
 must be writable by the user running the check. When download.nextcloud.com cannot be reached, the last cached value
 is used; without one the check returns OK with the note `(latest release unknown)`, so an outage of the download
 server never raises an alert.
+
+## Example 5
+
+```
+./check_nextcloud.py -u adminUser -p secretPassword -H cloud.example.com -c apps
+
+OK - No apps requiring update
+
+# Or, when updates are available...
+
+WARNING - 2 apps require update: deck->1.17.7, onlyoffice->9.15.1
+```
+
+With `--apps-info` the check `apps` never raises an alert. It always returns OK and only lists the available app
+updates:
+
+```
+./check_nextcloud.py -u adminUser -p secretPassword -H cloud.example.com -c apps --apps-info
+
+OK - 2 app update(s) available: deck->1.17.7, onlyoffice->9.15.1
+```
+
+Recent versions of the serverinfo app leave the app list out of the api response unless asked for it, so the check
+`apps` adds `skipApps=false` to the api url.
 
 ## Icinga config example
 

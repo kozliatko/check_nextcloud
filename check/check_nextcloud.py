@@ -23,6 +23,9 @@
 #  ~~ Version 2.1 ~~
 # - Parameter "--max-major-behind" added: check "system" warns when the installed major version is more than N
 # majors behind the latest release on download.nextcloud.com (cached in --release-cache for 12 hours)
+#  ~~ Version 2.2 ~~
+# - Check "apps" asks the api for the app list (skipApps=false), recent serverinfo versions leave it out by default
+# - Parameter "--apps-info" added: check "apps" always returns OK and only lists the available app updates
 #
 #################
 
@@ -96,13 +99,14 @@ parser.add_option('--ignore-proxy', dest='ignore_proxy', default=False, action='
 parser.add_option('--ignore-sslcert', dest='ignore_sslcert', default=False, action='store_true', help='Ignore ssl certificate (default="false")')
 parser.add_option('--max-major-behind', dest='max_major_behind', type='int', help='Check "system": WARNING when the installed major version is more than N majors behind the latest release on download.nextcloud.com')
 parser.add_option('--release-cache', dest='release_cache', default='/var/tmp/check_nextcloud_latest_release', help='Cache file for the latest release, refreshed every 12 hours (default="/var/tmp/check_nextcloud_latest_release")')
+parser.add_option('--apps-info', dest='apps_info', default=False, action='store_true', help='Check "apps": always return OK and only list the available app updates (default="false")')
 parser.add_option('--api-url', dest='api_url', type='string', default='/ocs/v2.php/apps/serverinfo/api/v1/info', help='Url of the api (default="/ocs/v2.php/apps/serverinfo/api/v1/info")')
 
 (options, args) = parser.parse_args()
 
 # Print the version of this script
 if options.version:
-	print('Version 2.1')
+	print('Version 2.2')
 	sys.exit(0)
 
 # Validate the user input...
@@ -138,6 +142,10 @@ else:
 
 # Create the url to access the api
 url = '{0}://{1}{2}'.format(options.protocol, hostname, api_url)
+
+# serverinfo leaves the app list out unless asked for it
+if options.check == 'apps':
+	url += '{0}skipApps=false'.format('&' if '?' in url else '?')
 
 # Encode credentials as base64
 credential = base64.b64encode(bytes('%s:%s' % (options.username, options.password), 'ascii'))
@@ -336,6 +344,10 @@ if options.check == 'uploadFilesize':
 if options.check == 'apps':
 	xml_apps = xml_root.find('data').find('nextcloud').find('system').find('apps')
 
+	if xml_apps is None or xml_apps.find('num_updates_available') is None:
+		print('UNKNOWN - [API] no app information in the serverinfo response')
+		sys.exit(3)
+
 	xml_apps_num_updates_available = int(xml_apps.find('num_updates_available').text)
 
 	if xml_apps_num_updates_available == 0:
@@ -344,7 +356,12 @@ if options.check == 'apps':
 	else:
 		xml_apps_updates = xml_apps.find('app_updates')
 		xml_apps_list = []
-		for app in xml_apps_updates:
+		for app in xml_apps_updates if xml_apps_updates is not None else []:
 			xml_apps_list.append('{0}->{1}'.format(app.tag, app.text))
-		print('WARNING - {0} apps require update: {1}'.format(xml_apps_num_updates_available, ' ,'.join(xml_apps_list)))
+
+		if options.apps_info:
+			print('OK - {0} app update(s) available: {1}'.format(xml_apps_num_updates_available, ', '.join(xml_apps_list)))
+			sys.exit(0)
+
+		print('WARNING - {0} apps require update: {1}'.format(xml_apps_num_updates_available, ', '.join(xml_apps_list)))
 		sys.exit(1)
